@@ -43,9 +43,9 @@ void add_cpu(float *x_h, float *y_h, float *res_h, int n) {
 
 #### System Organization and Naming Conventions
 
-In the context of CUDA and GPU programming, the CPU is referred to as the **host**, and its memory is called **host memory**. The GPU is called the **device**, and its memory is known as **global memory**. CPUs and GPUs have separate memories and cannot directly access each other's memory without transferring data via interconnects like PCIe or NVLink.
+Before diving into GPU code, lets get familiarize with some naming conventions. In the context of CUDA and GPU programming, the CPU is referred to as the **host**, and its memory is called **host memory**. The GPU is called the **device**, and its memory is known as **global memory**. CPUs and GPUs have separate memories and cannot directly access each other's memory without transferring data via interconnects like PCIe or NVLink.
 
-A typical process follows these steps:
+A typical process for performing vector addition on GPU follows these steps:
 1. Allocate memory on the GPU.
 2. Copy data from host memory to GPU memory.
 3. Perform computation on the GPU.
