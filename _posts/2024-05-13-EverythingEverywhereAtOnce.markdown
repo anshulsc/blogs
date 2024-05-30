@@ -125,3 +125,50 @@ def initialize_process_group(world_size, rank):
 In this function, `world_size` represents the total number of processes in the group, and `rank` is a unique identifier for each process. We set environment variables such as `master_addr`, which refers to the IP address of the machine running the process with rank 0. For multi-node setups, this address would be the IP of the master node. `master_port` coordinates communication between processes.
 
 We then call `init_process_group` with `backend='nccl'` to initialize the default distributed process group. This function ensures that processes can communicate using the specified backend (in this case, "nccl" for NVIDIA GPUs).
+
+Next, we'll modify the `Trainer` class to wrap the model with `torch.nn.parallel.DistributedDataParallel`. This ensures that the model is replicated across multiple GPUs and gradients are synchronized during training. Also, in the `_save_checkpoint` method, we need to access the module's state dictionary when saving the model checkpoint. Here's the updated `Trainer` class:
+
+```python
+from torch.nn.parallel import DistributedDataParallel as DDP
+class Trainer:
+    def __init__(self,
+                 model: torch.nn.Module,
+                 train_data: DataLoader,
+                 optimizer,
+                 rank: int,
+                 save_every: int) -> None:
+
+        self.rank = rank
+        self.model = DDP(model.to(rank), device_ids=[rank])
+        self.train_data = train_data
+        self.optimizer = optimizer
+        self.save_every = save_every
+
+    def _save_checkpoint(self, epoch):
+        checkpoint = self.model.module.state_dict()  # Access module's state_dict
+        PATH = f"checkpoint_rank{self.rank}.pt"
+        torch.save(checkpoint, PATH)
+        print(f"Epoch {epoch} | Training snapshot saved at {PATH}")
+```
+
+Furthermore, we need to adjust the data loading process to ensure that data is properly distributed across GPUs. We'll use `torch.utils.data.distributed.DistributedSampler` and set `shuffle=False`. Here's how to prepare the data loader:
+
+```python
+def prepare_dataloader(dataset, batch_size):
+    sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+    return DataLoader(dataset, batch_size=batch_size, sampler=sampler)
+```
+
+Lastly, we'll update the `main` function to include the initialization and destruction of the distributed process group:
+
+```python
+def main(rank: int, world_size: int, save_every: int, total_epochs: int):
+    initialize_process_group(rank, world_size)
+    model, train_data, optimizer = load_train_objs()
+    train_data = prepare_dataloader(train_data, batch_size=10)
+    trainer = Trainer(model, train_data, optimizer, rank, save_every)
+    trainer.train(total_epochs)
+    destroy_process_group()
+```
+
+By making these changes, we ensure that our training code is compatible with DDP and can effectively utilize multiple GPUs for accelerated training.
