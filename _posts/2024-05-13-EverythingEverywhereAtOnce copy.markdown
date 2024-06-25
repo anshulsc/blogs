@@ -169,6 +169,18 @@ def main(rank: int, world_size: int, save_every: int, total_epochs: int):
     trainer = Trainer(model, train_data, optimizer, rank, save_every)
     trainer.train(total_epochs)
     destroy_process_group()
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description='simple distributed training job')
+    parser.add_argument('total_epochs', type=int, help='Total epochs to train the model')
+    parser.add_argument('save_every', type=int, help='How often to save a snapshot')
+    parser.add_argument('--batch_size', default=32, type=int, help='Input batch size on each device (default: 32)')
+    args = parser.parse_args()
+    
+    world_size = torch.cuda.device_count()
+    # Using mp.spawn
+    mp.spawn(main, args=(world_size, args.save_every, args.total_epochs, args.batch_size), nprocs=world_size)
 ```
 
 By making these changes, we ensure that our training code is compatible with DDP and can effectively utilize multiple GPUs for accelerated training.
