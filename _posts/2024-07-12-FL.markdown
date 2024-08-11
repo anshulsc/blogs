@@ -7,72 +7,46 @@ excerpt: Notes on States Space Model and Mamba Architecture
 mathjax: true
 ---
 
-Federated Learning (FL) has emerged as a groundbreaking approach to training machine learning models, particularly when data privacy is paramount. Imagine the ability to harness the collective learning power of thousands of devices, all without ever pooling their data in a central location. That’s the promise of FL, where a central server—known as the **leader**—orchestrates training across multiple distributed clients or **learners**.
+Federated Learning (FL) has emerged as a groundbreaking approach to training machine learning models, especially when data privacy is a top priority. Imagine harnessing the collective learning power of thousands of devices—all without ever pooling their data in a central location. That’s the promise of FL. At its core, a central server—known as the **leader**—orchestrates training across multiple distributed clients or **learners**.
 
-In this detailed exploration, we'll dive into the intricacies of building a federated learning system from scratch, using a custom ResNet model, gRPC for communication, and Python as our toolkit.
+In this detailed exploration, we’ll dive into the intricacies of building a federated learning system from scratch. Our toolkit includes a custom ResNet model, gRPC for communication, and Python. Through this journey, you'll see how these components come together to create a robust federated learning system.
 
 <div class="imgcap">
 <img src="/assets/fl/fl1.png" width="800" style="border: none;">
 <figcaption>Figure 1: Starting Training on Two different machine</figcaption>
 </div>
 
-#### **The Architecture: A High-Level Overview**
 
-At its core, the federated learning architecture consists of:
+### **The Architecture: A High-Level Overview**
 
-- **Leader (Server)**: The central authority that manages the global model, aggregates updates from learners, and disseminates the refined model.
-- **Learners (Clients)**: Distributed devices that train on local datasets and send model updates (gradients) back to the leader.
+Federated learning's architecture is both elegantly simple and incredibly powerful. It revolves around two primary components:
 
-The workflow is elegantly simple yet powerful:
-1. **Learner Registration**: Each learner connects to the leader, registering itself and receiving its portion of the data for training.
-2. **Model Synchronization**: Learners fetch the latest global model from the leader.
-3. **Local Training**: Learners train on their local data, compute gradients, and send them back to the leader.
-4. **Global Model Update**: The leader aggregates these gradients, updates the global model, and the cycle repeats.
+1. **Leader (Server):** The central authority that manages the global model, aggregates updates from learners, and disseminates the refined model.
+2. **Learners (Clients):** These are the distributed devices that train on local datasets and send model updates (gradients) back to the leader.
 
-This architecture ensures that data remains decentralized, significantly enhancing privacy while still enabling robust model training.
+The workflow begins with **learner registration**, where each learner connects to the leader, registers itself, and receives its portion of the data for training. Next comes **model synchronization**, where learners fetch the latest global model from the leader. Then, **local training** takes place—learners train on their local data, compute gradients, and send them back to the leader. Finally, the **global model is updated** as the leader aggregates these gradients, refining the model. This cycle repeats until the model converges to the desired level of performance.
 
-#### **The Leader Service (`leader.py`)**
+This architecture is the heart of federated learning, allowing data to remain decentralized, which significantly enhances privacy while still enabling robust model training.
 
-The leader service is the command center of the federated learning setup. It handles:
+### **The Leader Service (`leader.py`)**
 
-- **Initialization**: Setting up the global model and optimizer, which will be refined over multiple iterations.
-- **Learner Registration**: Assigning unique IDs and datasets to learners as they join the network.
-- **Gradient Aggregation**: Collecting gradients from learners and updating the global model, which will be the foundation for the next round of training.
+The leader service is the command center of the federated learning setup. Its primary responsibilities include initializing the global model and optimizer, managing learner registration by assigning unique IDs and datasets, and aggregating gradients from learners to update the global model. Communication between the leader and the learners is handled by gRPC, making the process efficient and scalable. gRPC supports complex data serialization through Protocol Buffers, which ensures that even large models and datasets can be handled effectively.
 
-The leader uses gRPC to communicate with the learners, making the process efficient and scalable. gRPC is particularly suited for this task due to its support for complex data serialization through Protocol Buffers, ensuring that even large models and datasets can be handled effectively.
+### **The Learner Service (`learner.py`)**
 
-#### **The Learner Service (`learner.py`)**
+On the client side, the learners take on the responsibility of training the model. They begin by synchronizing their local models with the global model maintained by the leader. Local training is then conducted on their respective datasets. After training, learners compute the necessary gradients and send these back to the leader for aggregation. The learner’s role is critical, as it ensures that the global model is continuously refined using diverse data from multiple sources—all while the data itself remains decentralized.
 
-On the client side, the learners are responsible for the actual training process:
+### **gRPC and Protocol Buffers: The Backbone of Communication**
 
-- **Model Synchronization**: Before training, learners synchronize their local model with the global model maintained by the leader.
-- **Local Training**: Learners train on their local datasets, compute the necessary gradients, and then send these gradients back to the leader for aggregation.
+gRPC, combined with Protocol Buffers, forms the backbone of communication in this federated learning system. gRPC is a high-performance, open-source framework that allows for efficient, scalable communication between the leader and learners. It is particularly well-suited for this task due to its support for streaming and its ability to handle complex data serialization.
 
-The learner’s role is critical, as it ensures that the global model is continuously refined using diverse data from multiple sources—all without centralizing the data itself.
+Protocol Buffers (`.proto` files) define the structure of the messages and services used in this communication. They act as a contract between the leader and learners, ensuring consistency and efficiency throughout the federated learning process.
 
-#### **gRPC and Protocol Buffers: The Backbone of Communication**
+### **Diving into `leader.proto`**
 
-gRPC, combined with Protocol Buffers, is the secret sauce that makes this decentralized learning process possible.
+The `leader.proto` file is essential to the gRPC communication in our federated learning system. It defines the services that the leader provides to the learners and the structure of the messages exchanged.
 
-**gRPC** enables efficient, scalable communication between the leader and learners. It supports streaming, which is crucial when dealing with large models or datasets, allowing these to be transmitted in chunks rather than all at once.
-
-**Protocol Buffers (`.proto` files)** define the structure of the messages and services used in this communication. They act as a contract between the leader and learners, ensuring that both parties understand the format of the data being exchanged. This setup is crucial for maintaining consistency and efficiency in the federated learning process.
-
-- **`leader.proto`**: Specifies the services and messages for managing learners, distributing models, and receiving gradients.
-- **`learner.proto`**: Defines the services and messages for learners to receive models, start training, and send gradients.
-
-
-gRPC (Google Remote Procedure Call) is a high-performance, open-source framework that allows you to define services and messages in a language-agnostic way, making it perfect for distributed systems like federated learning. In this setup, gRPC facilitates the communication between a central server (leader) and multiple clients (learners).
-
-**Why gRPC?**
-
-- **Efficiency**: gRPC uses Protocol Buffers (protobufs) for data serialization, which is faster and more compact than traditional formats like JSON or XML.
-- **Streaming Support**: gRPC’s support for streaming enables sending large datasets or model updates in chunks, crucial for federated learning.
-- **Multi-Language Support**: gRPC allows different components to be implemented in different languages, providing flexibility in distributed systems.
-
-#### **Diving into `leader.proto`**
-
-The `leader.proto` file is the backbone of the gRPC communication in our federated learning system. It defines the services that the leader provides to the learners, as well as the structure of the messages exchanged. Here’s a breakdown of its key components:
+Here’s a breakdown of the key components:
 
 ```protobuf
 syntax = "proto3";
@@ -86,6 +60,8 @@ service LeaderService {
     rpc AccumulateGradients(GradientData) returns (Ack) {};
 }
 ```
+
+The `RegisterLearner` service registers a new learner with the leader, assigning a unique ID and confirming successful registration. The `GetModel` service sends the current global model to the learner in chunks, ensuring that the learner is always working with the latest version of the model. The `GetData` service sends the relevant dataset to the learner, again in manageable chunks. Finally, the `AccumulateGradients` service receives the gradients computed by the learner after local training, allowing the leader to update the global model.
 
 **Services Explained:**
 
@@ -162,14 +138,11 @@ The `leader.proto` file serves as the contract between the leader and the learne
 By using gRPC with this `proto` file, we achieve a scalable and efficient communication system that is essential for coordinating complex tasks like federated learning. The design ensures that the leader can manage multiple learners simultaneously, distribute models and data effectively, and aggregate learning updates to continuously improve the global model.
 
 
-
 ### **Deep Dive into `learner.proto`**
 
-The `learner.proto` file is a crucial component in the federated learning system, defining how learners (clients) interact with the leader (server). This file outlines the services that learners use to receive the global model, synchronize it, and participate in the training process.
+Similarly, the `learner.proto` file is critical in defining how learners interact with the leader. It outlines the services that learners use to receive the global model, synchronize it, and participate in the training process.
 
-#### **Breaking Down `learner.proto`**
-
-Here’s the `learner.proto` structure:
+Here’s the structure:
 
 ```protobuf
 syntax = "proto3";
@@ -193,67 +166,19 @@ message Ack {
 }
 ```
 
-**Services Explained:**
+The `StartTraining` service initiates the training process on the learner’s device, while the `SyncModelState` service ensures that the learner’s local model is always synchronized with the global model from the leader. These services and message types form the foundation of the learner’s ability to participate in the federated learning process.
 
-1. **`StartTraining`**:
-   - **Purpose**: Initiates the training process on the learner’s device.
-   - **Input**: `Empty` (no additional data needed to start training).
-   - **Output**: `Ack` (acknowledges that training has started).
-   - **Use Case**: Once the learner is ready, it requests to start training on the local data. The leader confirms the request with an acknowledgment, allowing the learner to begin the training process.
+### **The Model Architecture (`model.py`)**
 
-2. **`SyncModelState`**:
-   - **Purpose**: Synchronizes the learner’s local model with the global model from the leader.
-   - **Input**: `ModelState` (contains a chunk of the global model).
-   - **Output**: `Ack` (acknowledges receipt of the model chunk).
-   - **Use Case**: Before starting training or when updates are available, the learner requests the latest global model. The leader sends the model in chunks, which the learner integrates, ensuring it’s working with the most current version.
+The `model.py` file houses the ResNet model—a powerful deep learning architecture well-suited for image classification tasks. The ResNet model leverages residual connections to mitigate the vanishing gradient problem, allowing for the construction of deeper networks. Training is conducted using Stochastic Gradient Descent (SGD) with Cross-Entropy Loss, both of which are standard for classification tasks. This architecture provides the learners with a robust model that can generalize well across various datasets.
 
-**Message Types Explained:**
+### **Utility Functions (`utils.py`)**
 
-- **`ModelState`**: This message carries a chunk of the global model in a serialized format (as `bytes`). This allows the model to be transmitted in smaller, manageable pieces, which are reassembled by the learner.
-  
-- **`Empty`**: A simple placeholder message used when no additional data is required to initiate a service. In `StartTraining`, it indicates that no extra parameters are needed to begin the process.
+The `utils.py` file plays a crucial role in managing data. It handles data loading and preprocessing for datasets like CIFAR-10, ensuring that each learner gets a unique subset of data. Additionally, it applies data augmentation techniques, such as normalization and resizing, which are essential for improving the model's generalization capabilities.
 
-- **`Ack`**: Used for acknowledgment, `Ack` messages confirm the success of an operation, such as starting training or receiving a model chunk. It includes a `success` flag and a `message` for any additional information.
+### **The Federated Learning Workflow: A Step-by-Step Guide**
 
-#### **Why `learner.proto` is Critical**
-
-The `learner.proto` file defines the interaction protocol between the learner and the leader, ensuring that the learner can effectively participate in the federated learning process. By defining these services and messages, `learner.proto` allows the learner to:
-
-- **Synchronize** with the global model, ensuring that it is always working with the latest updates.
-- **Initiate Training** independently, allowing the learner to process local data and contribute to the global model without needing continuous oversight from the leader.
-
-In a federated learning setup, the ability of learners to operate semi-independently while maintaining synchronization with the leader is crucial. This file ensures that learners are equipped with the necessary tools to do so, enabling efficient and scalable distributed training.
-
-#### **The Model Architecture (`model.py`)**
-
-The `model.py` file houses the ResNet model, a powerful deep learning architecture well-suited for image classification tasks:
-
-- **ResNet Model**: The model leverages residual connections, which help mitigate the vanishing gradient problem, allowing for the construction of deeper networks.
-- **Optimizer and Loss Function**: The model is trained using Stochastic Gradient Descent (SGD) with Cross-Entropy Loss, both of which are standard for classification tasks.
-
-This architecture is critical to the project's success, as it provides the learners with a robust model that can generalize well across various datasets.
-
-
-
-#### **Utility Functions (`utils.py`)**
-
-The `utils.py` file is the unsung hero of the project, providing essential functions for data management:
-
-- **Data Loading**: Handles the loading and preprocessing of datasets like CIFAR-10, ensuring that each learner gets a unique subset of data.
-- **Data Augmentation**: Applies transformations such as normalization and resizing, which are crucial for improving the model's generalization capabilities.
-
-These utilities ensure that the data pipeline is smooth and that the model receives well-prepared data for training.
-
-#### **The Federated Learning Workflow: A Step-by-Step Guide**
-
-Now that we understand the components, let's walk through the entire workflow:
-
-1. **Learner Registration**: Each learner connects to the leader, receives a unique ID, and is assigned a portion of the dataset.
-2. **Model Synchronization**: Learners fetch the latest global model from the leader.
-3. **Local Training**: Each learner trains on its local data, computing gradients based on the model's performance.
-4. **Send Gradients**: Learners send their gradients back to the leader, which aggregates these updates.
-5. **Global Model Update**: The leader updates the global model based on the aggregated gradients.
-6. **Iteration**: This process repeats until the global model converges, meaning it reaches the desired level of performance.
+Let’s walk through the entire federated learning workflow. It begins with learner registration, where each learner connects to the leader and receives a unique ID and a portion of the dataset. Learners then fetch the latest global model from the leader through model synchronization. Next, each learner trains on its local data, computing gradients based on the model's performance. These gradients are sent back to the leader, which aggregates them to update the global model. This process repeats until the global model converges, meaning it reaches the desired level of performance.
 
 This workflow allows the system to learn from distributed data sources without centralizing sensitive data, making it both scalable and secure.
 
@@ -262,25 +187,18 @@ This workflow allows the system to learn from distributed data sources without c
 <figcaption>Figure 2: Accumlating Gradients from learner </figcaption>
 </div>
 
-#### **Federated Learning vs. Distributed Training: Understanding the Differences**
+### **Federated Learning vs. Distributed Training: Understanding the Differences**
 
-At first glance, federated learning and distributed training might seem like two sides of the same coin—they both involve training models across multiple devices or nodes. However, the key differences lie in **data locality** and **privacy**.
+Federated learning and distributed training may seem similar—they both involve training models across multiple devices or nodes. However, the key differences lie in **data locality** and **privacy**.
 
-**Distributed Training**:
-- In distributed training, data is often pooled together from multiple sources and then split across multiple machines to parallelize the training process.
-- The focus is on speeding up the training process by leveraging the computational power of multiple nodes, but the data is centralized before training begins.
+In distributed training, data is often pooled together from multiple sources and then split across multiple machines to parallelize the training process. The focus here is on speeding up the training process by leveraging the computational power of multiple nodes, but the data is centralized before training begins.
 
-**Federated Learning**:
-- Federated learning, on the other hand, keeps the data decentralized. The training happens locally on each learner’s device, and only the model updates (gradients) are shared with the central server (leader).
-- This approach is inherently more privacy-preserving because the raw data never leaves the learner’s device.
+Federated learning, on the other hand, keeps the data decentralized. Training happens locally on each learner’s device, and only the model updates (gradients) are shared with the central server (leader). This approach is inherently more privacy-preserving because the raw data never leaves the learner’s device.
 
-**Why the Confusion?**
-- The confusion often arises because both methods aim to utilize distributed resources for training. However, while distributed training is about efficiency and scalability, federated learning is about privacy and decentralization.
+### **Conclusion**
 
-In essence, federated learning is a subset of distributed training with a specific focus on data privacy and local computation.
+Federated learning represents a significant shift in how we approach machine learning. By decentralizing the training process and keeping data local, we can build robust models that respect privacy and security concerns. This blog has walked you through the architecture, the critical role of gRPC and Protocol Buffers, and the detailed workings of the `leader.proto` and `learner.proto` files. With this foundation, you're now equipped to explore and implement federated learning in your projects.
 
-Federated Learning represents a significant shift in how we approach machine learning. By decentralizing the training process and keeping data local, we can build robust models that respect privacy and security concerns. 
+**[Code Available at Github](https://github.com/anshulsc/metal-FL)**
 
 ---
-
-[Code Available at Github](https://github.com/anshulsc/metal-FL-).
