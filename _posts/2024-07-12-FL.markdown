@@ -3,7 +3,7 @@ layout: post
 title: Training Models Across Multiple Machines - The Federated Learning Way
 date:   2024-07-13 12:57:49 +0000
 categories: jekyll update
-excerpt: Notes on States Space Model and Mamba Architecture
+excerpt: Notes on Distributed Training
 mathjax: true
 ---
 
