@@ -1,6 +1,7 @@
 ---
 layout: post
 title: Optimal Brain Quantizer - Pruning and Quantizing the Neural Nets
+permalink: quantization/obs
 date: 2024-08-14 12:57:49 +0000
 categories: jekyll update
 excerpt: Notes on Quantizations of DNN | Pre-req for GPTQ
