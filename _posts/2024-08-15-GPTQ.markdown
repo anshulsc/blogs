@@ -1,0 +1,191 @@
+---
+layout: post
+title: Qunatizing the Large Language Model - GPTO
+permalink: quantization/GPTQ
+date: 2024-08-15 12:57:49 +0000
+categories: jekyll update
+excerpt: Notes on Quantizations of DNN | Pre-req for GPTQ
+mathjax: true
+---
+
+
+### 1. **Introduction to Quantization**
+
+**Quantization** in the context of machine learning refers to the process of reducing the number of bits used to represent numbers in a model, specifically the weights and sometimes the activations of neural networks. This is crucial for reducing memory usage and computational cost, especially for large models.
+
+#### Basic Quantization
+
+Suppose we have a floating-point number $$ x$$ in a neural network weight matrix, and we want to quantize it to a fixed-point representation with $$ b $$ bits. The general approach is:
+
+1. **Determine the Quantization Grid**: The quantization grid is a set of discrete values that the continuous number $$ x $$ can be mapped onto. For example, in uniform quantization, the grid could be determined by the range $$[x_\text{min}, x_\text{max}]$$ and the number of levels $$ 2^b $$.
+
+   $$
+   \Delta = \frac{x_\text{max} - x_\text{min}}{2^b - 1}
+   $$
+
+   where  $$ \Delta $$ is the step size between quantization levels.
+
+2. **Quantization Function**: The number $$ x $$ is then mapped to the nearest quantization level:
+
+   $$
+   \hat{x} = \text{round}\left(\frac{x - x_\text{min}}{\Delta}\right) \cdot \Delta + x_\text{min}
+   $$
+
+   Here, $$ \hat{x} $$ is the quantized value of $$ x $$.
+
+3. **Dequantization**: The process of mapping the quantized value  $$ \hat{x} $$ back to the original range (if needed) is called dequantization.
+
+#### Example
+
+Let's say we have a weight $$ x = 1.57 $$ and we want to quantize it using 2 bits. Assume the range $$([x_\text{min}, x_\text{max}]\) is \([0, 3]$$.
+
+- Step size $$ \Delta = \frac{3 - 0}{2^2 - 1} = 1 $$
+- Quantization: $$ \hat{x} = \text{round}\left(\frac{1.57 - 0}{1}\right) \cdot 1 + 0 = 2 $$
+
+The quantized value of $$ x = 1.57 $$ is $$ \hat{x} = 2 $$.
+
+### 2. **Quantization in Large Language Models**
+
+Large language models, like GPT-3, consist of billions of parameters, and quantization becomes non-trivial due to the complexity and size of these models. Simple rounding (as in the example above) might not preserve the accuracy required for high-performance tasks. 
+
+### 3. **Layer-Wise Quantization**
+
+The paper discusses layer-wise quantization, where each layer's weight matrix is quantized separately. The objective is to minimize the quantization error while ensuring that the model's performance remains close to that of the full-precision model.
+
+#### Mathematical Formulation
+
+Given a weight matrix $$ W $$ corresponding to a linear layer and the input matrix $$ X $$ of size $$ m \times d $$ (where $$ m $$ is the number of input data points and $$ d $$ is the dimensionality), the output is $$ WX $$. The goal is to find a quantized weight matrix $$\hat{W} $$ such that the squared error between the full precision and quantized outputs is minimized:
+
+$$
+\text{minimize} \quad ||WX - \hat{W}X||^2_F
+$$
+
+where $$ \( ||\dot||_F \) $$ denotes the Frobenius norm.
+
+This objective can be written as:
+
+$$
+||WX - \hat{W}X||^2_F = \sum_{i=1}^{m} ||W_i X_i - \hat{W}_i X_i||^2
+$$
+
+Where $$ W_i $$ is the i-th row of W and $$ X_i $$ is the i-th input vector.
+
+### 4. **Optimal Brain Quantization (OBQ)**
+
+The GPTQ method builds on a previously proposed technique called 
+<a href="https://blogs.anshulsc.live/quantization/obs">Optimal Brain Quantization</a>, which itself is inspired by Optimal Brain Surgeon (OBS) methods from neural network pruning.
+
+#### OBQ Method
+
+The idea behind OBQ is to iteratively quantize the weights of a row of $$ W $$ while adjusting the remaining weights to compensate for the quantization error. 
+
+For a weight vector $$ w $$ (one row of $$ W $$), the goal is to minimize the following:
+
+$$
+\text{minimize} \quad ||wX - \hat{w}X||^2
+$$
+
+Given the Hessian matrix $$ H = 2XX^\top $$, OBQ performs the following steps:
+
+1. **Select the Weight to Quantize**: Select the weight $$ w_j $$ that, when quantized, introduces the least error. This is computed as:
+
+   $$
+   j^* = \arg\min_j \left(\text{quant}(w_j) - w_j\right)^2 H^{-1}_{jj}
+   $$
+
+   where $$ H^{-1}_{jj} $$ is the $$ j $$-th diagonal element of the inverse Hessian matrix, which gives a measure of the sensitivity of the error to changes in $$ w_j $$.
+
+2. **Update the Remaining Weights**: After quantizing \( w_j \), adjust the remaining weights to minimize the error using:
+
+   $$
+   w' = w - \frac{w_j - \text{quant}(w_j)}{H^{-1}_{jj}} H^{-1}_{:,j}
+   $$
+
+   This update compensates for the error introduced by quantizing \( w_j \).
+
+3. **Repeat**: Repeat the process until all weights are quantized.
+
+### 5. **GPTQ Improvements**
+
+GPTQ introduces several key improvements over OBQ to handle the quantization of large-scale models:
+
+#### Arbitrary Order Insight
+
+The authors observed that while OBQ's greedy approach (quantizing the weight that introduces the least error first) is effective, it isn't strictly necessary, especially for large models. Quantizing weights in an arbitrary fixed order can achieve similar results while simplifying the process.
+
+This insight is crucial because it allows the quantization process to be parallelized and made more efficient.
+
+#### Lazy Batch Updates
+
+To improve computational efficiency, GPTQ batches the updates to weights rather than updating them after each quantization step. This reduces the memory bandwidth bottleneck, as the updates are more computationally dense.
+
+#### Cholesky Reformulation
+
+GPTQ also introduces a Cholesky decomposition approach to stabilize the quantization process for very large models. The Cholesky decomposition is used to compute the required inverse Hessian efficiently and with better numerical stability, particularly when quantizing large layers.
+
+#### The GPTQ Algorithm
+
+The GPTQ algorithm, combining these improvements, is outlined in the pseudocode in the paper. The key steps involve:
+
+1. **Precompute the Inverse Hessian**: Using the Cholesky decomposition.
+2. **Batch Quantization**: Quantize blocks of weights simultaneously and update the remaining weights lazily.
+3. **Global Update**: After quantizing a block, apply a global update to the remaining weights.
+
+### 6. **Example: Quantizing a Simple Layer**
+
+Let’s consider a simplified example of quantizing a single layer with GPTQ.
+
+- Suppose we have a layer with weights $$ W $$ of size $$ 3 \times 3 $$ and input $$ X $$ of size $$ 3 \times 2 $$. Assume we want to quantize the weights to 2-bit precision.
+
+1. **Compute the Hessian**:
+
+   $$
+   H = 2XX^\top
+   $$
+
+   For simplicity, let's assume $$ X $$ is an identity matrix, so $$ H $$ is just twice the identity matrix:
+
+   $$
+   H = 2I
+   $$
+
+2. **Cholesky Decomposition**:
+
+   Since $$ H $$ is diagonal, its Cholesky decomposition is straightforward:
+
+   $$
+   L = \sqrt{2} \times I
+   $$
+
+3. **Quantize the Weights**:
+
+   Using the GPTQ approach, select the first column of $$ W $$ and quantize it. Suppose the first weight is 0.7, and our quantization grid is $$ \{-1, -0.5, 0, 0.5, 1\} $$.
+
+   The closest value on the grid is 0.5. So, the quantized value is $$ \hat{w} = 0.5 $$.
+
+4. **Update the Remaining Weights**:
+
+   After quantizing the first weight, update the other weights in the same column to compensate for the error introduced. Use the inverse Hessian (in this case, $$ H^{-1} = \frac{1}{2} I $$ to adjust the weights.
+
+5. **Repeat**:
+
+   Repeat the process for the remaining columns until all weights are quantized.
+
+### 7. **Conclusion**
+
+GPTQ represents a significant improvement in the quantization of large language models, balancing the need for compression with the requirement to maintain model accuracy. By combining insights from OBQ, efficient computational techniques, and careful mathematical formulations, GPTQ enables
+
+ the quantization of models with hundreds of billions of parameters to 3 or 4 bits while preserving performance.
+
+### Summary:
+1. **Quantization**: Reduced number of bits per weight.
+2. **OBQ**: Iteratively quantizes weights while adjusting others to minimize error.
+3. **GPTQ Improvements**:
+   - Arbitrary order insight for simplification.
+   - Lazy batch updates to improve efficiency.
+   - Cholesky reformulation for numerical stability.
+
+This detailed breakdown should give you a comprehensive understanding of the mathematics involved in the GPTQ paper, as well as why and how these techniques are used. If you have any specific parts you'd like further elaboration on, feel free to ask!
+
+
+
